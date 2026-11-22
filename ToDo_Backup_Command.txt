@@ -1,0 +1,31 @@
+-- essential
+[x] Basic rsync functionality
+[x] Argument parsing with getopts
+[x] Input validation
+[x] destination directory is writable
+[x] source file is readable
+[x] Timestamped directories
+[x] rsync exit status 
+[x] Disk runs out of space.
+[x] REWRITE WITH FUNCTIONS
+[] Destination becomes unavailable.
+[] Source disappears during backup.
+[] Remote SSH connection fails.
+[] rsync trailing /
+[] mountpoint handling
+
+-- practicality
+[] Restore functionality
+[] 20-version retention
+[] Logging and error handling
+[] Configuration file for multiple servers
+[] Configuration for how many copies to keep
+[] Systemd service and timer
+
+-- finishing touches
+[] test failure scenarios
+[] test restore functionality
+[] Better error handling
+[] Verbose output
+[] Help output (--help not -h)
+[] Progress reporting
