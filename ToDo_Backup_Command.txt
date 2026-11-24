@@ -8,11 +8,10 @@
 [x] rsync exit status 
 [x] Disk runs out of space.
 [x] REWRITE WITH FUNCTIONS
-[] Destination becomes unavailable.
-[] Source disappears during backup.
-[] Remote SSH connection fails.
-[] rsync trailing /
-[] mountpoint handling
+[x] Destination becomes unavailable.
+[x] Remote SSH connection fails.
+[x] rsync trailing /
+[x] mountpoint handling
 
 -- practicality
 [] Restore functionality

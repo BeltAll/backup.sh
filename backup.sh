@@ -101,9 +101,11 @@ checkAvailableStorage() {
 
 checkCurrentMount() {
    destination_mnt=$(findmnt -nT "$destination" -o UUID)
-   root_mnt=$(findmnt -nT / -o UUID)
-   if [[ "$destination_mnt" == "$root_mnt" ]]; then # if destination is not on root disk, check if mnt is connected
+   source_mnt=$(findmnt -nT "$source" -o UUID)
+   if [[ "$destination_mnt" == "$source_mnt" ]] ; then # if destination is not on root disk, check if mnt is connected
       giveBasicError "destination is not located on ext disk or ext disk is not connected"
+   elif [[ -z "$destination_mnt" ]] || [[ -z "$source_mnt" ]]; then
+      giveBasicError "Error trying to gather UUID of Source or Destination"
    fi
    selected_mnt=$destination_mnt
 }
@@ -121,10 +123,18 @@ doBackup() {
    mount_status_pid=$!
    if [[ "$is_external" == 1 ]]; then
       error_code="external backup failed"
-      rsync -ah -e ssh "$source" "$backup_dir" &
+      if [[ -f "$source" ]]; then
+         rsync -ah -e ssh "$source" "$backup_dir" &
+      else
+         rsync -ah -e ssh "$source/" "$backup_dir" &
+      fi
    else
       error_code="backup failed"
-      rsync -ah "$source" "$backup_dir" &
+      if [[ -f "$source" ]]; then
+         rsync -ah "$source" "$backup_dir" &
+      else
+         rsync -ah "$source/" "$backup_dir" &
+      fi
    fi
    rsync_pid=$!
    wait "$rsync_pid"
