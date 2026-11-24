@@ -2,7 +2,6 @@
 
 # Global variables
 is_external=0
-is_verbose=0
 source_storage_margin=10
 
 # Configuration
@@ -52,11 +51,10 @@ doCleanUp() {
 # Main functions
 checkFlag() {
    OPTIND=1
-   while getopts "ehv" flag; do
+   while getopts "eh" flag; do
       case "$flag" in
          e) is_external=1 ;;
          h) showHelp ;;
-         v) is_verbose=1 ;;
          *) giveBasicError "invalid flag" ;;
       esac
    done
