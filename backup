@@ -62,6 +62,9 @@ checkFlag() {
 
 checkArguments() {
    shift "$((OPTIND - 1))"
+   if [[ "$#" == 0 ]]; then
+      showHelp
+   fi
    if [[ $# != 2 ]]; then
       giveBasicError "wrong amount of arguments"
    fi
