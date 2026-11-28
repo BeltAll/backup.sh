@@ -2,6 +2,7 @@
 
 # Global variables
 is_external=0
+is_restore=0
 source_storage_margin=10
 
 # Configuration
@@ -21,16 +22,24 @@ showHelp() {
 
 checkMountStatus() {
    while true; do
-   sleep 5
+      sleep 5
+      error_code=0
       destination_mnt=$(findmnt -nT "$destination" -o UUID)
-      mount_error=$?
-      if [[ "$destination_mnt" != "$selected_mnt" ]] || [[ "$mount_error" != 0 ]]; then
+      destination_mnt_error=$?
+      source_mnt=$(findmnt -nT "$source" -o UUID)
+      source_mnt_error=$?
+      if [[ "$destination_mnt" != "$selected_destination_mnt" ]] || [[ "$destination_mnt_error" != 0 ]]; then
+         error_code="destination mount changed during backup"
+      elif [[ "$source_mnt" != "$selected_source_mnt" ]] || [[ "$source_mnt_error" != 0 ]]; then
+         error_code="destination mount changed during backup"
+      fi
+      if [[ "$error_code" != 0 ]]; then
          if  [[ -v rsync_pid ]]; then
             if kill -0 "$rsync_pid" 2>/dev/null; then
                kill "$rsync_pid"
             fi
          fi
-         giveBasicError "destination mount changed during backup"
+         giveBasicError "$error_code"
       fi
    done
 }
@@ -51,10 +60,11 @@ doCleanUp() {
 # Main functions
 checkFlag() {
    OPTIND=1
-   while getopts "eh" flag; do
+   while getopts "ehr" flag; do
       case "$flag" in
          e) is_external=1 ;;
          h) showHelp ;;
+         r) is_restore=1 ;;
          *) giveBasicError "invalid flag" ;;
       esac
    done
@@ -62,6 +72,9 @@ checkFlag() {
 
 checkArguments() {
    shift "$((OPTIND - 1))"
+   if [[ "$#" == 0 ]]; then
+      showHelp
+   fi
    if [[ $# != 2 ]]; then
       giveBasicError "wrong amount of arguments"
    fi
@@ -107,7 +120,8 @@ checkCurrentMount() {
    elif [[ -z "$destination_mnt" ]] || [[ -z "$source_mnt" ]]; then
       giveBasicError "Error trying to gather UUID of Source or Destination"
    fi
-   selected_mnt=$destination_mnt
+   selected_destination_mnt=$destination_mnt
+   selected_source_mnt=$source_mnt
 }
 
 createBackupDirectory() {
@@ -121,6 +135,9 @@ createBackupDirectory() {
 doBackup() {
    checkMountStatus &
    mount_status_pid=$!
+   if [[ "$is_restore" == 1 ]]; then
+      backup_dir="$destination"
+   fi
    if [[ "$is_external" == 1 ]]; then
       error_code="external backup failed"
       if [[ -f "$source" ]]; then
@@ -142,16 +159,16 @@ doBackup() {
    if kill -0 "$mount_status_pid" 2>/dev/null; then
       kill "$mount_status_pid"
       wait "$mount_status_pid" 2>/dev/null
-      mount_error=0
+      destination_mount_error=0
    else
       wait "$mount_status_pid"
-      mount_error=$?
+      destination_mount_error=$?
    fi
-   if [[ "$mount_error" != 0 ]]; then
-      giveBasicError "$error_code 'mount error code' $mount_error"
+   if [[ "$destination_mount_error" != 0 ]]; then
+      giveBasicError "$error_code mount error code: $destination_mount_error"
    fi
    if [[ "$rsync_error" != 0 ]]; then
-      giveBasicError "$error_code 'rsync error code' $rsync_error"
+      giveBasicError "$error_code rsync error code: $rsync_error"
    fi
 }
 
@@ -160,7 +177,9 @@ main() {
    checkArguments "$@"
    checkCurrentMount
    checkAvailableStorage
-   createBackupDirectory
+   if [[ "$is_restore" == 0 ]]; then
+      createBackupDirectory
+   fi
    doBackup
 }
 
