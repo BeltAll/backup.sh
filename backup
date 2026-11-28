@@ -1,0 +1,169 @@
+#!/bin/bash
+
+# Global variables
+is_external=0
+source_storage_margin=10
+
+# Configuration
+set -o pipefail
+
+# Helper functions
+giveBasicError() {
+   echo "$1"
+   exit 1
+}
+
+showHelp() {
+   echo "Usage: backup [SOURCE] [DESTINATION]";
+   echo "Usage: backup -e user@server:[SOURCE] [DESTINATION]"
+   exit 0;
+}
+
+checkMountStatus() {
+   while true; do
+   sleep 5
+      destination_mnt=$(findmnt -nT "$destination" -o UUID)
+      mount_error=$?
+      if [[ "$destination_mnt" != "$selected_mnt" ]] || [[ "$mount_error" != 0 ]]; then
+         if  [[ -v rsync_pid ]]; then
+            if kill -0 "$rsync_pid" 2>/dev/null; then
+               kill "$rsync_pid"
+            fi
+         fi
+         giveBasicError "destination mount changed during backup"
+      fi
+   done
+}
+
+doCleanUp() {
+   if  [[ -v rsync_pid ]]; then
+      if kill -0 "$rsync_pid" 2>/dev/null; then
+         kill "$rsync_pid"
+      fi
+   fi
+   if [[ -v mount_status_pid ]]; then
+      if kill -0 "$mount_status_pid" 2>/dev/null; then
+         kill "$mount_status_pid"
+      fi
+   fi
+}
+
+# Main functions
+checkFlag() {
+   OPTIND=1
+   while getopts "eh" flag; do
+      case "$flag" in
+         e) is_external=1 ;;
+         h) showHelp ;;
+         *) giveBasicError "invalid flag" ;;
+      esac
+   done
+}
+
+checkArguments() {
+   shift "$((OPTIND - 1))"
+   if [[ $# != 2 ]]; then
+      giveBasicError "wrong amount of arguments"
+   fi
+   source="$1"
+   destination="$2"
+   test -e "$source" || giveBasicError "source does not exist"
+   test -d "$destination" || giveBasicError "destination does not exist"
+   test -r "$source" || giveBasicError "source is not readable"
+   test -w "$destination" || giveBasicError "destination is not writable"
+}
+
+checkAvailableStorage() {
+   source_approximate_size=$(du -sB1 "$source" | cut -f1)
+   local du_check=$?
+   if [[ $du_check -ne 0 ]]; then
+      giveBasicError "error checking approximate filesize. code: $du_check"
+   fi
+   required_storage=$(( source_approximate_size * (100 + source_storage_margin) / 100 ))
+   destination_available_storage=$(df --output=avail --block-size=1 "$destination" | tail -n 1)
+   local df_storage_check=$?
+   destination_storage_in_use=$(df --output=pcent "$destination" | tail -n 1 | tr -d %)
+   local df_percent_error=$?
+   if [[ "$df_percent_error" -eq 0 ]]; then
+      if [[ $destination_storage_in_use -ge 95 ]]; then
+         echo "WARNING: destination used space at $destination_storage_in_use %"
+      fi
+   else
+      giveBasicError "error checking storage percentage used"
+   fi
+   if ! [[ "$destination_available_storage" ]] || [[ $df_storage_check -ne 0 ]]; then
+      giveBasicError "error finding available space of destination"
+   fi
+   if (( required_storage > destination_available_storage )); then
+      giveBasicError "not enough storage space at destination"
+   fi
+}
+
+checkCurrentMount() {
+   destination_mnt=$(findmnt -nT "$destination" -o UUID)
+   source_mnt=$(findmnt -nT "$source" -o UUID)
+   if [[ "$destination_mnt" == "$source_mnt" ]] ; then # if destination is not on root disk, check if mnt is connected
+      giveBasicError "destination is not located on ext disk or ext disk is not connected"
+   elif [[ -z "$destination_mnt" ]] || [[ -z "$source_mnt" ]]; then
+      giveBasicError "Error trying to gather UUID of Source or Destination"
+   fi
+   selected_mnt=$destination_mnt
+}
+
+createBackupDirectory() {
+   backup_dir_name="$(date +%Y-%m-%d_%H-%M-%S)"
+   backup_dir="$destination"/"$backup_dir_name"
+   if ! mkdir "$backup_dir"; then
+      giveBasicError "problem creating backup directory"
+   fi
+}
+
+doBackup() {
+   checkMountStatus &
+   mount_status_pid=$!
+   if [[ "$is_external" == 1 ]]; then
+      error_code="external backup failed"
+      if [[ -f "$source" ]]; then
+         rsync -ah -e ssh "$source" "$backup_dir" &
+      else
+         rsync -ah -e ssh "$source/" "$backup_dir" &
+      fi
+   else
+      error_code="backup failed"
+      if [[ -f "$source" ]]; then
+         rsync -ah "$source" "$backup_dir" &
+      else
+         rsync -ah "$source/" "$backup_dir" &
+      fi
+   fi
+   rsync_pid=$!
+   wait "$rsync_pid"
+   rsync_error="$?" 
+   if kill -0 "$mount_status_pid" 2>/dev/null; then
+      kill "$mount_status_pid"
+      wait "$mount_status_pid" 2>/dev/null
+      mount_error=0
+   else
+      wait "$mount_status_pid"
+      mount_error=$?
+   fi
+   if [[ "$mount_error" != 0 ]]; then
+      giveBasicError "$error_code 'mount error code' $mount_error"
+   fi
+   if [[ "$rsync_error" != 0 ]]; then
+      giveBasicError "$error_code 'rsync error code' $rsync_error"
+   fi
+}
+
+main() {
+   checkFlag "$@"
+   checkArguments "$@"
+   checkCurrentMount
+   checkAvailableStorage
+   createBackupDirectory
+   doBackup
+}
+
+trap 'doCleanUp' EXIT
+
+main "$@"
