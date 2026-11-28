@@ -1,3 +1,8 @@
+checklist
+
+x - done and tested
+c - not checked or tested yet
+
 -- essential
 [x] Basic rsync functionality
 [x] Argument parsing with getopts
@@ -12,11 +17,12 @@
 [x] Remote SSH connection fails.
 [x] rsync trailing /
 [x] mountpoint handling
+[c] check if source is mounted, check if destination is mounted
+[] Logging and error handling
 
 -- practicality
-[] Restore functionality
+[x] Restore functionality
 [] 20-version retention
-[] Logging and error handling
 [] Configuration file for multiple servers
 [] Configuration for how many copies to keep
 [] Systemd service and timer
@@ -28,3 +34,8 @@
 [] Verbose output
 [] Help output (--help not -h)
 [] Progress reporting
+
+-- ideas:
+Ideas:
+[] add a file with the backup folder that lists where the files came from so I can add the functionality to overwrite current configs with the backed up ones.
+(could be dangerous if you overwrite the whole /etc/ folder or other files)
